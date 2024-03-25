@@ -1,0 +1,9 @@
+[package]
+name = "eiger_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = {version = "1.31.0", features= ["net", "rt", "macros", "time", "io-util"]}
+sha2 = "0.10.7"
+rand = "0.8"

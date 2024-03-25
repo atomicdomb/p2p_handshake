@@ -1,0 +1,5 @@
+#ignore target
+target/
+#ignore directory store (auto-genned on Mac OS X)
+*.DS_Store
+.DS_Store
