@@ -22,7 +22,8 @@ use crate::endian_helpers::*;
 //Primary Functions - The actual handshake logic
 pub async fn perform_btc_handshake(mut stream: TcpStream) {
     let _ = perform_version_check(&mut stream).await;
-    let _ = perform_verack_check(&mut stream).await;
+    let _ = perform_verack_check(&mut stream).await; //Most modern nodes skip this step nowadays
+    println!("Handshake complete.");
 }
 async fn perform_version_check(stream: &mut TcpStream) -> Result<(),std::io::Error> {
     //first perform the version exchange
@@ -39,29 +40,33 @@ async fn perform_version_check(stream: &mut TcpStream) -> Result<(),std::io::Err
     // Send version message.
     stream.write_all(&message.to_bytes()).await?;
 
+    //Read the recieved bytes
     let mut reader = BufReader::new(stream);
     let received_bytes = match reader.fill_buf().await {
         Ok(r) => r,
         Err(_e) => panic!("Unable to fill byte buffer"),
     };
     let received_n = received_bytes.len();
+
+    //Create a message object from the bytes
     let received_version = match Message::from_bytes(received_bytes) {
         Ok(r) => r,
         Err(e) => panic!("error matching message:{:?}", e),
     };
+
+    //Create a version object from the message payload
     let version_message = match Version::from_rawmessage(&received_version.payload) {
         Ok(v) => v,
         Err(_e) => panic!("Failed to extract version from raw message"),
     };
-    println!("Handshake complete - Message Recieved:");
+    if version.nonce == version_message.nonce { panic!("Nonce conflict"); }
+
+    //In principle the handshake is complete, originally verack messages were sent but most nodes go straight to sendcmpt.
+    println!("Message Recieved:");
     println!("Version: {:?}", version_message.protocol_version);
     println!("Services: {:?}", version_message.service);
     println!("Timestamp received: {:?}", version_message.timestamp);
     
-    if version.nonce == version_message.nonce {
-        panic!("Nonce conflict");
-    }
-
     reader.consume(received_n);
     Ok(())
 }
