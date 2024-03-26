@@ -26,7 +26,7 @@ pub type Aes256 = ctr::Ctr64BE<aes::Aes256>;
 
 pub async fn perform_eth_handshake(mut stream: TcpStream, node_public_key: PublicKey) -> Result<(),std::io::Error> {
     //Set up private keys, ephermeral keys, gen auth bytes etc..
-    println!("starting handshake...");
+    println!("Starting handshake...");
     let nonce = H256::random();
     let private_key = SecretKey::new(&mut secp256k1::rand::thread_rng());
     let public_key = PublicKey::from_secret_key(SECP256K1, &private_key);
@@ -36,12 +36,12 @@ pub async fn perform_eth_handshake(mut stream: TcpStream, node_public_key: Publi
 
     //Send starting message and parse response
     stream.write(&auth_encrypted).await?;
-    println!("Auth message send to target node");
+    println!("Auth message sent to node...");
     let mut buf = [0_u8; 1024];
     let resp = stream.read(&mut buf).await?;
     let mut bytes_used = 0u16;
     let (decrypted,auth_received) = decrypt_data(&mut buf, &mut bytes_used, &private_key);
-    println!("Hello Response from Node:{:?}", decrypted);
+    println!("Hello Response from Node as bytes: {:?}", decrypted);
 
     //Now we are going to parse the response and check the MACs
     let rlp = Rlp::new(decrypted);
@@ -80,16 +80,10 @@ pub async fn perform_eth_handshake(mut stream: TcpStream, node_public_key: Publi
     ingress_mac.update(auth_received.as_ref());
     let ingress_aes = Aes256::new(aes_secret.as_ref().into(),iv.as_ref().into());
 
-    
-    
-    //handshake.derive_secrets(decrypted)?;
-    println!("buf {:?}",buf.len());
-    println!("bytes_used {:?}",bytes_used);
     let hello_msg = gen_msg_bytes(egress_aes,egress_mac,public_key);
     stream.write(&hello_msg).await?;
     let frame = read_frame_buffer(&mut buf[bytes_used as usize..resp],ingress_aes,ingress_mac);
-    //let frame = handshake.read_frame(&mut buf[bytes_used as usize..resp])?;
-    //decode_hello_message(frame)?;
+
     Ok(())
 }
 pub fn convert_to_public_key(pub_key : String) -> Result<PublicKey, String> {
@@ -276,9 +270,9 @@ fn read_frame_buffer(buf: &mut [u8],mut ingress_aes : Aes256,mut ingress_h_mac :
     ingress_h_mac.compute_frame(frame_data);
 
     if frame_mac == ingress_h_mac.digest() {
-        println!("\nHandshake success\nMAC IS VALID");
-        println!("Frame Mac:{:?}", frame_mac);
-        println!("Ingress Mac:{:?}", ingress_h_mac.digest());
+        println!("\nHandshake success!\nMAC IS VALID");
+        println!("Frame Mac: {:?}", frame_mac);
+        println!("Ingress Mac: {:?}", ingress_h_mac.digest());
     } else {
         //return Err(Error::InvalidMac(frame_mac));
     }
