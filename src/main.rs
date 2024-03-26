@@ -9,6 +9,7 @@ use crate::ethereum_handshake::*;
 mod bitcoin_handshake;
 mod ethereum_handshake;
 mod endian_helpers;
+mod hmac;
 
 //This is essentially a CLI driver to perform handshakes to various blockchains
 #[tokio::main(flavor = "current_thread")]
@@ -16,7 +17,7 @@ async fn main() {
 
     println!("This is a blockchain node p2p handshake demonstration.");
     println!("==========================================================================");
-    println!("Choose between Bitcoin (b), Ethereum (e), Polygon (p), Solana (s),\nhelp (h) or quit (q).");
+    println!("Choose between Bitcoin (b), Ethereum (e), help (h) or quit (q).");
 
     loop{
         println!("\nSelect a blockchain to perform a p2p handshake with, or quit (q):\n");
