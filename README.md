@@ -11,6 +11,11 @@ This project is a simple command line tool that will perform a p2p handshake wit
    ```bash
    git clone https://github.com/atomicdomb/p2p_handshake.git
    ```
+   
+1. **Ensure you are in the correct directory**
+   ```bash
+   cd p2p_handshake
+   ```
 
 2. **Run the Project**
    ```bash
