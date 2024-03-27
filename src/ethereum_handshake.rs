@@ -4,20 +4,17 @@ pub const ETH_PROTOCOL_VERSION: usize = 5;
 
 //Imports
 use crate::hmac::HMac;
-use std::ops::BitAnd;
 use bytes::{Bytes, BytesMut};
 use byteorder::{BigEndian, ByteOrder};
 use ethereum_types::{H128, H256};
-use std::net::{Ipv4Addr, SocketAddrV4};
 use secp256k1::{PublicKey, SecretKey, SECP256K1};
 use rlp::{Decodable, Encodable,Rlp, RlpStream};
 use aes::cipher::{KeyIvInit, StreamCipher};
 use sha2::{Digest, Sha256};
 use sha3::Keccak256;
-use concat_kdf::Error;
 use hmac::{Hmac, Mac as h_mac};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
 
@@ -26,7 +23,7 @@ pub type Aes256 = ctr::Ctr64BE<aes::Aes256>;
 
 pub async fn perform_eth_handshake(mut stream: TcpStream, node_public_key: PublicKey) -> Result<(),std::io::Error> {
     //Set up private keys, ephermeral keys, gen auth bytes etc..
-    println!("Starting handshake...");
+    println!("\nStarting handshake...");
     let nonce = H256::random();
     let private_key = SecretKey::new(&mut secp256k1::rand::thread_rng());
     let public_key = PublicKey::from_secret_key(SECP256K1, &private_key);
@@ -38,12 +35,24 @@ pub async fn perform_eth_handshake(mut stream: TcpStream, node_public_key: Publi
     stream.write(&auth_encrypted).await?;
     println!("Auth message sent to node...");
     let mut buf = [0_u8; 1024];
-    let resp = stream.read(&mut buf).await?;
+    let resp = match stream.read(&mut buf).await{
+        Ok(r) => r,
+        Err(e) => { //Usually a connection reset
+            println!("{:?}, This usually happens from too many handshake attempts.",e.to_string());
+            println!("You can simply wait a bit and try again. Or change the node you are connecting to.");
+            return Ok(());
+        }
+    };
     let mut bytes_used = 0u16;
+    if is_zero(&buf){ //Handle zero buffer instance
+        println!("Zero buffer found. The node you're connecting to sent a blank response. Try reconnecting.");
+        return Ok(());
+    }
     let (decrypted,auth_received) = decrypt_data(&mut buf, &mut bytes_used, &private_key);
-    println!("Hello Response from Node as bytes: {:?}", decrypted);
+    println!("Hello Response from Node as bytes: \n{:?}\n", decrypted);
 
     //Now we are going to parse the response and check the MACs
+    println!("Parsing initial response...");
     let rlp = Rlp::new(decrypted);
     let recipient_ephemeral_pubk_raw: Vec<_> = rlp.val_at(0).unwrap();
     let mut mini_buf = [4_u8; 65];
@@ -80,10 +89,11 @@ pub async fn perform_eth_handshake(mut stream: TcpStream, node_public_key: Publi
     ingress_mac.update(auth_received.as_ref());
     let ingress_aes = Aes256::new(aes_secret.as_ref().into(),iv.as_ref().into());
 
+    println!("Sending hello message...");
     let hello_msg = gen_msg_bytes(egress_aes,egress_mac,public_key);
     stream.write(&hello_msg).await?;
-    let frame = read_frame_buffer(&mut buf[bytes_used as usize..resp],ingress_aes,ingress_mac);
-
+    println!("Verifying handshake...");
+    let _ = read_frame_buffer(&mut buf[bytes_used as usize..resp],ingress_aes,ingress_mac);
     Ok(())
 }
 pub fn convert_to_public_key(pub_key : String) -> Result<PublicKey, String> {
@@ -154,7 +164,7 @@ fn gen_msg_bytes(mut egress_aes : Aes256, mut egress_mac : HMac, public_key : Pu
 }
 fn gen_signature(private_key: SecretKey, remote_public_key: PublicKey, nonce : H256, ephemeral_key : SecretKey) -> [u8; 65] {
 	
-    let public_key = PublicKey::from_secret_key(SECP256K1, &private_key);
+    //let public_key = PublicKey::from_secret_key(SECP256K1, &private_key);
     let shared_key = H256::from_slice(
         &secp256k1::ecdh::shared_secret_point(&remote_public_key, &private_key)[..32],
     );
@@ -254,11 +264,10 @@ fn read_frame_buffer(buf: &mut [u8],mut ingress_aes : Aes256,mut ingress_h_mac :
     let mac = H128::from_slice(mac);
     ingress_h_mac.compute_header(header);
     if mac != ingress_h_mac.digest() {
-        //return Err(Error::InvalidMac(mac));
+        println!("Invalid mac. Naughty Naughty..");
     }
 
     ingress_aes.apply_keystream(header);
-
     let mut frame_size = BigEndian::read_uint(header, 3) + 16;
     let padding = frame_size % 16;
     if padding > 0 {
@@ -273,13 +282,17 @@ fn read_frame_buffer(buf: &mut [u8],mut ingress_aes : Aes256,mut ingress_h_mac :
         println!("\nHandshake success!\nMAC IS VALID");
         println!("Frame Mac: {:?}", frame_mac);
         println!("Ingress Mac: {:?}", ingress_h_mac.digest());
-    } else {
-        //return Err(Error::InvalidMac(frame_mac));
-    }
+    } 
+
     ingress_aes.apply_keystream(frame_data);
     frame_data.to_owned()
 }
-
+fn is_zero(buf: &[u8]) -> bool {
+    let (prefix, aligned, suffix) = unsafe { buf.align_to::<u128>() };
+    prefix.iter().all(|&x| x == 0)
+        && suffix.iter().all(|&x| x == 0)
+        && aligned.iter().all(|&x| x == 0)
+}
 
 //Structs + Implementations for neccessary object logic
 #[derive(Debug)]

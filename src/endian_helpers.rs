@@ -1,18 +1,12 @@
 //Little and Big Endian conversion helper functions - These are fairly standard
-pub fn parse_frombytes_be<'a, T>(buff: &Vec<u8>) -> Result<(T, Vec<u8>), std::io::Error>
-where
-    T: FromEndian + Sized,
-{
+pub fn parse_frombytes_be<'a, T>(buff: &Vec<u8>) -> Result<(T, Vec<u8>), std::io::Error> where T: FromEndian + Sized{
     let size = core::mem::size_of::<T>();
     match read_drop_slice(buff, size) {
         Ok((res, remaining)) => Ok((FromEndian::from_be(&res), remaining)),
         Err(e) => Err(e),
     }
 }
-pub fn parse_frombytes_le<'a, T>(buff: &Vec<u8>) -> Result<(T, Vec<u8>), std::io::Error>
-where
-    T: FromEndian + Sized,
-{
+pub fn parse_frombytes_le<'a, T>(buff: &Vec<u8>) -> Result<(T, Vec<u8>), std::io::Error> where T: FromEndian + Sized{
     let size = core::mem::size_of::<T>();
     match read_drop_slice(buff, size) {
         Ok((res, remaining)) => Ok((FromEndian::from_le(&res), remaining)),
@@ -23,10 +17,7 @@ pub fn read_drop_slice(buff: &Vec<u8>, size: usize) -> Result<(&[u8], Vec<u8>), 
     if buff.len() >= size {
         Ok((&buff[0..size], buff[size..].to_vec()))
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            "Buffer too small",
-        ))
+        Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof,"Buffer too small",))
     }
 }
 
